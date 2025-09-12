@@ -1,0 +1,27 @@
+version: '3.7'
+
+services:
+  n8n:
+    image: n8nio/n8n
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - NODE_ENV=production
+      - WEBHOOK_URL=http://localhost:5678
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE}
+      - N8N_CORS_ALLOW_ORIGIN=${N8N_CORS_ALLOW_ORIGIN}
+      - N8N_EDITOR_BASE_URL=${N8N_EDITOR_BASE_URL}
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=${N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS}
+      - DB_SQLITE_POOL_SIZE=${DB_SQLITE_POOL_SIZE}
+      - N8N_RUNNERS_ENABLED=${N8N_RUNNERS_ENABLED}
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=${N8N_BLOCK_ENV_ACCESS_IN_NODE}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n-data/init.sh:/docker-entrypoint-init.d/init.sh
+
+volumes:
+  n8n_data:

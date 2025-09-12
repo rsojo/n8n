@@ -1,0 +1,461 @@
+{
+  "name": "WhatsApp ↔ Google Calendar – Agendar Citas",
+  "nodes": [
+    {
+      "parameters": {
+  "httpMethod": "POST",
+  "path": "whatsapp-inbound",
+        "responseMode": "lastNode",
+        "options": {
+          "responseData": "{{$json.response || {\"status\":\"ok\"}}}",
+          "responseCode": 200
+        }
+      },
+      "id": "Webhook_Inbound",
+      "name": "Webhook – WhatsApp Inbound",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [280, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Normaliza el payload de WhatsApp Cloud API\n// Espera body.entry[0].changes[0].value.messages[0]\nconst body = items[0].json;\nconst entry = body.entry?.[0]?.changes?.[0]?.value || {};\nconst msg = entry.messages?.[0] || {};\nconst text = (msg.text && msg.text.body) || (msg.button && msg.button.text) || '';\nconst from = msg.from || entry.contacts?.[0]?.wa_id || '';\nconst name = entry.contacts?.[0]?.profile?.name || '';\n\n// Intentar parsear fecha/hora simple: formatos tipo \"2025-09-13 10:00\", \"13/09 10:00\", \"13-09-2025 10:00\"\nfunction parseDateHeuristic(t) {\n  const tz = 'America/Bogota';\n  let m = t.match(/(\\d{4}-\\d{2}-\\d{2})[ T](\\d{1,2}:\\d{2})/);\n  if (m) {\n    return new Date(`${m[1]}T${m[2]}:00`);\n  }\n  m = t.match(/(\\d{1,2})[\\/.-](\\d{1,2})(?:[\\/.-](\\d{2,4}))?\\s+(\\d{1,2}):(\\d{2})/);\n  if (m) {\n    const d = m[1].padStart(2,'0');\n    const M = m[2].padStart(2,'0');\n    let Y = m[3];\n    if (!Y) {\n      Y = String(new Date().getFullYear());\n    } else if (Y.length === 2) {\n      Y = '20' + Y;\n    }\n    const hh = m[4].padStart(2,'0');\n    const mm = m[5].padStart(2,'0');\n    return new Date(`${Y}-${M}-${d}T${hh}:${mm}:00`);\n  }\n  return null;\n}\n\nconst parsedStart = parseDateHeuristic(text);\nlet hasParsedDate = false;\nlet startISO = null;\nlet endISO = null;\nconst durationMin = 30;\nif (parsedStart && !isNaN(parsedStart.getTime())) {\n  hasParsedDate = true;\n  const start = new Date(parsedStart);\n  const end = new Date(start.getTime() + durationMin * 60000);\n  startISO = start.toISOString();\n  endISO = end.toISOString();\n}\n\nreturn [{\n  json: { from, name, text, hasParsedDate, startISO, endISO, durationMin, tz: 'America/Bogota', raw: body }\n}];"
+      },
+      "id": "Fn_Normalize",
+      "name": "Function – Normalizar & Parsear",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [560, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.hasParsedDate}}"
+            }
+          ],
+          "string": [
+            {
+              "value1": "={{$json.text.toLowerCase()}}",
+              "operation": "contains",
+              "value2": "agendar"
+            },
+            {
+              "value1": "={{$json.text.toLowerCase()}}",
+              "operation": "contains",
+              "value2": "cita"
+            },
+            {
+              "value1": "={{$json.text.toLowerCase()}}",
+              "operation": "contains",
+              "value2": "reserva"
+            }
+          ]
+        }
+      },
+      "id": "IF_Intencion",
+      "name": "IF – ¿Hay fecha o intención?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [820, 300]
+    },
+    {
+      "parameters": {
+        "calendar": "={{$env.GCAL_CALENDAR_ID || ''}}",
+        "operation": "getAll",
+        "additionalFields": {
+          "returnAll": true,
+          "orderBy": "startTime",
+          "timeMin": "={{$json.startISO || new Date().toISOString()}}",
+          "timeMax": "={{$json.endISO || new Date(Date.now()+14*24*60*60*1000).toISOString()}}",
+          "singleEvents": true
+        }
+      },
+      "id": "GCAL_GetAll",
+      "name": "Google Calendar – Obtener eventos",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 4,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "={{$env.GCAL_CREDENTIAL_ID || 'Google_Calendar_Account'}}",
+          "name": "Google_Calendar_Account"
+        }
+      },
+      "position": [1080, 140]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Revisa conflicto simple: si hayParsedDate y hay algún evento que cruce el rango, marcar conflicto.\nconst hasParsedDate = $json.hasParsedDate;\nif (!hasParsedDate) {\n  // No tenemos fecha; este branch no aplica\n  return items;\n}\nconst startISO = new Date($json.startISO);\nconst endISO = new Date($json.endISO);\nlet conflict = false;\nfor (const it of items) {\n  const e = it.json;\n  const s = new Date(e.start?.dateTime || e.start?.date);\n  const f = new Date(e.end?.dateTime || e.end?.date);\n  if ((s < endISO) && (f > startISO)) {\n    conflict = true;\n    break;\n  }\n}\nreturn [{ json: { ...$json, conflict } }];"
+      },
+      "id": "Fn_CheckConflict",
+      "name": "Function – Verificar conflicto",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [1320, 140]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.conflict === true}}"
+            }
+          ]
+        }
+      },
+      "id": "IF_Conflict",
+      "name": "IF – ¿Conflicto?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1540, 140]
+    },
+    {
+      "parameters": {
+        "resource": "event",
+        "operation": "create",
+        "calendar": "={{$env.GCAL_CALENDAR_ID || ''}}",
+        "start": "={{$json.startISO}}",
+        "end": "={{$json.endISO}}",
+        "additionalFields": {
+          "summary": "={{'Cita con ' + ($json.name || $json.from)}}",
+          "description": "Reservado vía WhatsApp",
+          "source": {
+            "title": "WhatsApp",
+            "url": "https://www.whatsapp.com/"
+          }
+        }
+      },
+      "id": "GCAL_Create",
+      "name": "Google Calendar – Crear evento",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 4,
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "={{$env.GCAL_CREDENTIAL_ID || 'Google_Calendar_Account'}}",
+          "name": "Google_Calendar_Account"
+        }
+      },
+      "position": [1760, 40]
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "requestMethod": "POST",
+        "url": "={{'https://graph.facebook.com/v19.0/' + ($env.WABA_PHONE_NUMBER_ID || 'PHONE_NUMBER_ID') + '/messages'}}",
+        "jsonParameters": true,
+        "options": {},
+        "sendHeaders": true,
+        "headerParametersJson": "={\"Content-Type\":\"application/json\"}",
+        "queryParametersJson": "=\n{}",
+        "bodyParametersJson": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": {{$json.from}},\n  \"type\": \"text\",\n  \"text\": { \n    \"body\": \"¡Listo! Tu cita quedó para {{$json.startISO}} ({{$json.tz}}). Si deseas reprogramar, responde: Cambiar.\"\n  }\n}"
+      },
+      "id": "WA_Confirm",
+      "name": "WhatsApp – Confirmación",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "={{$env.WABA_TOKEN_CREDENTIAL || 'WhatsApp_Cloud_API'}}",
+          "name": "WhatsApp_Cloud_API"
+        }
+      },
+      "position": [2000, 40]
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "requestMethod": "POST",
+        "url": "={{'https://graph.facebook.com/v19.0/' + ($env.WABA_PHONE_NUMBER_ID || 'PHONE_NUMBER_ID') + '/messages'}}",
+        "jsonParameters": true,
+        "options": {},
+        "sendHeaders": true,
+        "headerParametersJson": "={\"Content-Type\":\"application/json\"}",
+        "bodyParametersJson": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": {{$json.from}},\n  \"type\": \"text\",\n  \"text\": { \n    \"body\": \"La franja solicitada no está disponible. Propongo estas opciones ({{$json.tz}}):\\n1) {{new Date(Date.now()+24*60*60*1000).toISOString().slice(0,16).replace('T',' ')}}\\n2) {{new Date(Date.now()+24*60*60*1000+4*60*60*1000).toISOString().slice(0,16).replace('T',' ')}}\\n3) {{new Date(Date.now()+24*60*60*1000+6*60*60*1000).toISOString().slice(0,16).replace('T',' ')}}\\nResponde con 1, 2 o 3.\"\n  }\n}"
+      },
+      "id": "WA_Suggest",
+      "name": "WhatsApp – Sugerir horarios",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "={{$env.WABA_TOKEN_CREDENTIAL || 'WhatsApp_Cloud_API'}}",
+          "name": "WhatsApp_Cloud_API"
+        }
+      },
+      "position": [1760, 240]
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "requestMethod": "POST",
+        "url": "={{'https://graph.facebook.com/v19.0/' + ($env.WABA_PHONE_NUMBER_ID || 'PHONE_NUMBER_ID') + '/messages'}}",
+        "jsonParameters": true,
+        "options": {},
+        "sendHeaders": true,
+        "headerParametersJson": "={\"Content-Type\":\"application/json\"}",
+        "bodyParametersJson": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": {{$json.from}},\n  \"type\": \"text\",\n  \"text\": { \n    \"body\": \"¡Hola! Puedo agendarte una cita. Envíame una fecha y hora, por ejemplo: 2025-09-13 10:00, o escribe: Agendar.\"\n  }\n}"
+      },
+      "id": "WA_Help",
+      "name": "WhatsApp – Ayuda",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "={{$env.WABA_TOKEN_CREDENTIAL || 'WhatsApp_Cloud_API'}}",
+          "name": "WhatsApp_Cloud_API"
+        }
+      },
+      "position": [1080, 440]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Si no hay fecha, genera propuesta de tres slots \"rápidos\" para el próximo día laboral.\nfunction nextBusinessDay(d){\n  const nd = new Date(d);\n  nd.setDate(nd.getDate()+1);\n  const dow = nd.getDay(); // 0 dom - 6 sab\n  if (dow === 0) nd.setDate(nd.getDate()+1);\n  if (dow === 6) nd.setDate(nd.getDate()+2);\n  return nd;\n}\n\nif ($json.hasParsedDate) {\n  return [{ json: { ...$json, suggestions: [] } }];\n}\nconst base = nextBusinessDay(new Date());\nconst suggestions = [10, 14, 16].map(h => {\n  const s = new Date(base); s.setHours(h,0,0,0);\n  const e = new Date(s.getTime()+30*60000);\n  return { startISO: s.toISOString(), endISO: e.toISOString() };\n});\nreturn [{ json: { ...$json, suggestions } }];"
+      },
+      "id": "Fn_Suggest",
+      "name": "Function – Generar sugerencias",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [1080, 240]
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "requestMethod": "POST",
+        "url": "={{'https://graph.facebook.com/v19.0/' + ($env.WABA_PHONE_NUMBER_ID || 'PHONE_NUMBER_ID') + '/messages'}}",
+        "jsonParameters": true,
+        "options": {},
+        "sendHeaders": true,
+        "headerParametersJson": "={\"Content-Type\":\"application/json\"}",
+        "bodyParametersJson": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": {{$json.from}},\n  \"type\": \"text\",\n  \"text\": { \n    \"body\": \"Puedo agendarte en:\\n1) {{$json.suggestions[0].startISO}}\\n2) {{$json.suggestions[1].startISO}}\\n3) {{$json.suggestions[2].startISO}}\\nResponde con 1, 2 o 3, o envía una fecha y hora en formato AAAA-MM-DD HH:mm.\"\n  }\n}"
+      },
+      "id": "WA_Offer",
+      "name": "WhatsApp – Ofrecer opciones",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "={{$env.WABA_TOKEN_CREDENTIAL || 'WhatsApp_Cloud_API'}}",
+          "name": "WhatsApp_Cloud_API"
+        }
+      },
+      "position": [1320, 240]
+    },
+    {
+      "parameters": {
+        "responseCode": 200,
+        "responseData": "={\"response\": {\"status\": \"ok\"}}",
+        "responseBinaryPropertyName": ""
+      },
+      "id": "Respond_200",
+      "name": "Responder 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2260, 300]
+    },
+    {
+      "parameters": {
+        "continueOnFail": true
+      },
+      "id": "Err_Trap",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [280, 560]
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "requestMethod": "POST",
+        "url": "={{'https://graph.facebook.com/v19.0/' + ($env.WABA_PHONE_NUMBER_ID || 'PHONE_NUMBER_ID') + '/messages'}}",
+        "jsonParameters": true,
+        "options": {},
+        "sendHeaders": true,
+        "headerParametersJson": "={\"Content-Type\":\"application/json\"}",
+        "bodyParametersJson": "={\n  \"messaging_product\": \"whatsapp\",\n  \"to\": {{$json.from || 'REEMPLAZAR_NUMERO_TEST'}},\n  \"type\": \"text\",\n  \"text\": { \n    \"body\": \"Tuvimos un problema procesando tu solicitud. Nuestro equipo lo revisará.\"\n  }\n}"
+      },
+      "id": "WA_OnError",
+      "name": "WhatsApp – OnError",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "={{$env.WABA_TOKEN_CREDENTIAL || 'WhatsApp_Cloud_API'}}",
+          "name": "WhatsApp_Cloud_API"
+        }
+      },
+      "position": [560, 560]
+    }
+  ],
+  "connections": {
+    "Webhook – WhatsApp Inbound": {
+      "main": [
+        [
+          {
+            "node": "Function – Normalizar & Parsear",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function – Normalizar & Parsear": {
+      "main": [
+        [
+          {
+            "node": "IF – ¿Hay fecha o intención?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF – ¿Hay fecha o intención?": {
+      "main": [
+        [
+          {
+            "node": "Function – Generar sugerencias",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Google Calendar – Obtener eventos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "WhatsApp – Ayuda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function – Generar sugerencias": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp – Ofrecer opciones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar – Obtener eventos": {
+      "main": [
+        [
+          {
+            "node": "Function – Verificar conflicto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function – Verificar conflicto": {
+      "main": [
+        [
+          {
+            "node": "IF – ¿Conflicto?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF – ¿Conflicto?": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp – Sugerir horarios",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Calendar – Crear evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Calendar – Crear evento": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp – Confirmación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp – Confirmación": {
+      "main": [
+        [
+          {
+            "node": "Responder 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp – Sugerir horarios": {
+      "main": [
+        [
+          {
+            "node": "Responder 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp – Ayuda": {
+      "main": [
+        [
+          {
+            "node": "Responder 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp – OnError",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp – OnError": {
+      "main": [
+        [
+          {
+            "node": "Responder 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "staticData": {},
+  "settings": {
+    "timezone": "America/Bogota"
+  },
+  "version": 2,
+  "active": false
+}

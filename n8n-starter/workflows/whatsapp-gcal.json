@@ -3,11 +3,11 @@
   "nodes": [
     {
       "parameters": {
-  "httpMethod": "POST",
-  "path": "whatsapp-inbound",
-        "responseMode": "lastNode",
+        "httpMethod": "POST",
+  "path": "whatsapp_inbound",
+        "responseMode": "onReceived",
         "options": {
-          "responseData": "{{$json.response || {\"status\":\"ok\"}}}",
+          "responseData": "{\"status\":\"ok\"}",
           "responseCode": 200
         }
       },

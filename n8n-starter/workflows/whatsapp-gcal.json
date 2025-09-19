@@ -4,15 +4,15 @@
     {
       "parameters": {
         "httpMethod": "POST",
-  "path": "whatsapp_inbound",
+        "path": "inbound",
         "responseMode": "onReceived",
         "options": {
           "responseData": "{\"status\":\"ok\"}",
           "responseCode": 200
         }
       },
-      "id": "Webhook_Inbound",
-      "name": "Webhook – WhatsApp Inbound",
+  "id": "Webhook_Inbound",
+  "name": "wh",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [280, 300]

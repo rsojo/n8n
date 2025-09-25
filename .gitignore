@@ -26,6 +26,10 @@ pnpm-debug.log*
 *.env
 .env.*
 n8n-starter/.env
+
+# Permitir archivos de ejemplo de entorno
+!*.env.example
+!**/.env.example
 /workspaces/n8n/n8n-starter/.env
 
 # --- n8n: datos locales (si se ejecuta fuera de Docker o con bind mounts) ---

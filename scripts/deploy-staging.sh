@@ -6,6 +6,8 @@ set -eu
 : "${N8N_STAGING_SSH_KEY_PATH:?Missing N8N_STAGING_SSH_KEY_PATH}"
 : "${N8N_STAGING_ENV_FILE:?Missing N8N_STAGING_ENV_FILE}"
 
+node scripts/validate-staging.js
+
 REMOTE_DIR="${N8N_STAGING_REMOTE_DIR:-/home/${N8N_STAGING_SSH_USER}/n8n-staging}"
 ARCHIVE_PATH="/tmp/n8n-staging.tar.gz"
 

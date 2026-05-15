@@ -7,6 +7,7 @@
     "up:local": "sh scripts/up-local.sh",
     "down:local": "docker compose --env-file n8n-starter/.env -f n8n-starter/docker-compose.yml down",
     "verify:local": "node scripts/verify-n8n.js",
+    "validate:staging": "node scripts/validate-staging.js",
     "deploy:staging": "sh scripts/deploy-staging.sh",
     "verify:staging": "node scripts/verify-staging.js"
   }

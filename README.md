@@ -23,6 +23,7 @@ Repositorio de infraestructura y starter de `n8n` para la demo de automatizació
 
 - No almacenar llaves privadas, bases de datos ni credenciales exportadas en el repo
 - Usar `.env` local a partir de `.env.example`
+- El runbook end-to-end vive en `automatizacion-facturas/ai/plans/staging_runbook.md`
 
 ## Inicio rápido
 
@@ -44,5 +45,6 @@ Documentación detallada:
 - `npm run up:local`: levanta n8n local
 - `npm run down:local`: detiene n8n local
 - `npm run verify:local`: smoke test local
+- `npm run validate:staging`: valida `N8N_STAGING_ENV_FILE` antes del deploy
 - `npm run deploy:staging`: despliegue remoto por SSH
 - `npm run verify:staging`: smoke test de staging

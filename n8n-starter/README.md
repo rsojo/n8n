@@ -40,6 +40,12 @@ Para staging usa como base:
 
 - `n8n-starter/.env.staging.example`
 
+Antes de desplegar valida el archivo real:
+
+```bash
+N8N_STAGING_ENV_FILE=n8n-starter/.env.staging npm run validate:staging
+```
+
 ## Workflow incluido
 
 - Archivo: `workflows/invoice-gmail-to-backend.json`

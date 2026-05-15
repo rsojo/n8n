@@ -6,11 +6,22 @@
       "name": "Gmail Trigger",
       "type": "n8n-nodes-base.gmailTrigger",
       "typeVersion": 1,
-      "position": [-600, 0],
+      "position": [
+        -600,
+        0
+      ],
       "parameters": {
-        "pollTimes": { "item": [{ "mode": "everyMinute" }] },
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
         "simple": false,
-        "options": { "downloadAttachments": true }
+        "options": {
+          "downloadAttachments": true
+        }
       }
     },
     {
@@ -18,13 +29,20 @@
       "name": "Has Attachments",
       "type": "n8n-nodes-base.filter",
       "typeVersion": 2,
-      "position": [-360, 0],
+      "position": [
+        -360,
+        0
+      ],
       "parameters": {
         "conditions": {
           "conditions": [
             {
               "leftValue": "={{ $binary }}",
-              "operator": { "type": "object", "operation": "exists", "singleValue": true }
+              "operator": {
+                "type": "object",
+                "operation": "exists",
+                "singleValue": true
+              }
             }
           ],
           "combinator": "and"
@@ -36,14 +54,20 @@
       "name": "Classify Email",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [-120, 0],
+      "position": [
+        -120,
+        0
+      ],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.API_BASE_URL + '/api/v1/ai/classify' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "X-API-Key", "value": "={{ $env.N8N_API_KEY }}" }
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.N8N_API_KEY }}"
+            }
           ]
         },
         "sendBody": true,
@@ -56,14 +80,20 @@
       "name": "Create Case",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [120, 0],
+      "position": [
+        120,
+        0
+      ],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.API_BASE_URL + '/api/v1/invoice-cases/from-email' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "X-API-Key", "value": "={{ $env.N8N_API_KEY }}" }
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.N8N_API_KEY }}"
+            }
           ]
         },
         "sendBody": true,
@@ -76,14 +106,20 @@
       "name": "Register Attachments",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [360, 0],
+      "position": [
+        360,
+        0
+      ],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.API_BASE_URL + '/api/v1/invoice-cases/' + $json.case_id + '/attachments' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "X-API-Key", "value": "={{ $env.N8N_API_KEY }}" }
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.N8N_API_KEY }}"
+            }
           ]
         }
       }
@@ -93,14 +129,20 @@
       "name": "Extract Invoice Data",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [600, 0],
+      "position": [
+        600,
+        0
+      ],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.API_BASE_URL + '/api/v1/ai/extract' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "X-API-Key", "value": "={{ $env.N8N_API_KEY }}" }
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.N8N_API_KEY }}"
+            }
           ]
         }
       }
@@ -110,14 +152,20 @@
       "name": "Validate Extraction",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [840, 0],
+      "position": [
+        840,
+        0
+      ],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.API_BASE_URL + '/api/v1/ai/validate' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "X-API-Key", "value": "={{ $env.N8N_API_KEY }}" }
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.N8N_API_KEY }}"
+            }
           ]
         }
       }
@@ -127,30 +175,106 @@
       "name": "Notify",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1080, 0],
+      "position": [
+        1080,
+        0
+      ],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.API_BASE_URL + '/api/v1/invoice-cases/' + $('Create Case').item.json.case_id + '/notifications' }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "X-API-Key", "value": "={{ $env.N8N_API_KEY }}" }
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.N8N_API_KEY }}"
+            }
           ]
         }
       }
     }
   ],
   "connections": {
-    "Gmail Trigger": { "main": [[{ "node": "Has Attachments", "type": "main", "index": 0 }]] },
-    "Has Attachments": { "main": [[{ "node": "Classify Email", "type": "main", "index": 0 }]] },
-    "Classify Email": { "main": [[{ "node": "Create Case", "type": "main", "index": 0 }]] },
-    "Create Case": { "main": [[{ "node": "Register Attachments", "type": "main", "index": 0 }]] },
-    "Register Attachments": { "main": [[{ "node": "Extract Invoice Data", "type": "main", "index": 0 }]] },
-    "Extract Invoice Data": { "main": [[{ "node": "Validate Extraction", "type": "main", "index": 0 }]] },
-    "Validate Extraction": { "main": [[{ "node": "Notify", "type": "main", "index": 0 }]] }
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Has Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Attachments": {
+      "main": [
+        [
+          {
+            "node": "Classify Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Email": {
+      "main": [
+        [
+          {
+            "node": "Create Case",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Case": {
+      "main": [
+        [
+          {
+            "node": "Register Attachments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register Attachments": {
+      "main": [
+        [
+          {
+            "node": "Extract Invoice Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Invoice Data": {
+      "main": [
+        [
+          {
+            "node": "Validate Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Extraction": {
+      "main": [
+        [
+          {
+            "node": "Notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
   "active": false,
   "settings": {},
   "pinData": {},
-  "versionId": "invoice-gmail-to-backend"
+  "versionId": "sprint-4-gmail-to-backend"
 }

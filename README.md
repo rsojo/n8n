@@ -27,7 +27,7 @@ Repositorio de infraestructura y starter de `n8n` para la demo de automatizació
 ## Inicio rápido
 
 ```bash
-docker compose --env-file n8n-starter/.env -f n8n-starter/docker-compose.yml up -d
+npm run up:local
 ```
 
 UI local:
@@ -37,3 +37,12 @@ UI local:
 Documentación detallada:
 
 - `n8n-starter/README.md`
+
+## Comandos operativos
+
+- `npm run prepare:env`: crea `n8n-starter/.env` si no existe
+- `npm run up:local`: levanta n8n local
+- `npm run down:local`: detiene n8n local
+- `npm run verify:local`: smoke test local
+- `npm run deploy:staging`: despliegue remoto por SSH
+- `npm run verify:staging`: smoke test de staging

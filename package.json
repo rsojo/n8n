@@ -1,0 +1,13 @@
+{
+  "name": "n8n-invoice-runtime",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "prepare:env": "node scripts/prepare-env.js",
+    "up:local": "sh scripts/up-local.sh",
+    "down:local": "docker compose --env-file n8n-starter/.env -f n8n-starter/docker-compose.yml down",
+    "verify:local": "node scripts/verify-n8n.js",
+    "deploy:staging": "sh scripts/deploy-staging.sh",
+    "verify:staging": "node scripts/verify-staging.js"
+  }
+}

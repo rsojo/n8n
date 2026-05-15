@@ -12,7 +12,8 @@ Este starter levanta `n8n` con Docker y deja listo el workflow principal de ingr
 ## Cómo iniciar
 
 ```bash
-docker compose -f n8n-starter/docker-compose.yml up -d
+cp n8n-starter/.env.example n8n-starter/.env
+docker compose --env-file n8n-starter/.env -f n8n-starter/docker-compose.yml up -d
 ```
 
 UI local:
@@ -34,6 +35,10 @@ Variables clave:
 - `N8N_API_KEY`: API key del backend para el servicio n8n
 - `WEBHOOK_URL`: URL base de n8n
 - `N8N_EDITOR_BASE_URL`: URL del editor
+
+Para staging usa como base:
+
+- `n8n-starter/.env.staging.example`
 
 ## Workflow incluido
 

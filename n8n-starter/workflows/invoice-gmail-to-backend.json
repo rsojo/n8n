@@ -1,0 +1,156 @@
+{
+  "name": "Gmail to Backend Invoice Intake",
+  "nodes": [
+    {
+      "id": "gmail-trigger",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1,
+      "position": [-600, 0],
+      "parameters": {
+        "pollTimes": { "item": [{ "mode": "everyMinute" }] },
+        "simple": false,
+        "options": { "downloadAttachments": true }
+      }
+    },
+    {
+      "id": "filter-attachments",
+      "name": "Has Attachments",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [-360, 0],
+      "parameters": {
+        "conditions": {
+          "conditions": [
+            {
+              "leftValue": "={{ $binary }}",
+              "operator": { "type": "object", "operation": "exists", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        }
+      }
+    },
+    {
+      "id": "classify-email",
+      "name": "Classify Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [-120, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.API_BASE_URL + '/api/v1/ai/classify' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-Key", "value": "={{ $env.N8N_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { message_id: $json.id, subject: $json.subject, body_text: $json.textPlain || '', from_email: $json.from?.value?.[0]?.address || '', attachments: Object.keys($binary || {}).map((key) => ({ filename: key, mime_type: $binary[key].mimeType })) } }}"
+      }
+    },
+    {
+      "id": "create-case",
+      "name": "Create Case",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [120, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.API_BASE_URL + '/api/v1/invoice-cases/from-email' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-Key", "value": "={{ $env.N8N_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { email_message_id: $('Gmail Trigger').item.json.id, thread_id: $('Gmail Trigger').item.json.threadId, subject: $('Gmail Trigger').item.json.subject, from_email: $('Gmail Trigger').item.json.from?.value?.[0]?.address || '', received_at: $('Gmail Trigger').item.json.date || new Date().toISOString() } }}"
+      }
+    },
+    {
+      "id": "register-attachments",
+      "name": "Register Attachments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [360, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.API_BASE_URL + '/api/v1/invoice-cases/' + $json.case_id + '/attachments' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-Key", "value": "={{ $env.N8N_API_KEY }}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "extract-data",
+      "name": "Extract Invoice Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [600, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.API_BASE_URL + '/api/v1/ai/extract' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-Key", "value": "={{ $env.N8N_API_KEY }}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "validate-data",
+      "name": "Validate Extraction",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [840, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.API_BASE_URL + '/api/v1/ai/validate' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-Key", "value": "={{ $env.N8N_API_KEY }}" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "notify",
+      "name": "Notify",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1080, 0],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.API_BASE_URL + '/api/v1/invoice-cases/' + $('Create Case').item.json.case_id + '/notifications' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-Key", "value": "={{ $env.N8N_API_KEY }}" }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Gmail Trigger": { "main": [[{ "node": "Has Attachments", "type": "main", "index": 0 }]] },
+    "Has Attachments": { "main": [[{ "node": "Classify Email", "type": "main", "index": 0 }]] },
+    "Classify Email": { "main": [[{ "node": "Create Case", "type": "main", "index": 0 }]] },
+    "Create Case": { "main": [[{ "node": "Register Attachments", "type": "main", "index": 0 }]] },
+    "Register Attachments": { "main": [[{ "node": "Extract Invoice Data", "type": "main", "index": 0 }]] },
+    "Extract Invoice Data": { "main": [[{ "node": "Validate Extraction", "type": "main", "index": 0 }]] },
+    "Validate Extraction": { "main": [[{ "node": "Notify", "type": "main", "index": 0 }]] }
+  },
+  "active": false,
+  "settings": {},
+  "pinData": {},
+  "versionId": "invoice-gmail-to-backend"
+}

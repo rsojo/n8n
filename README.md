@@ -33,7 +33,9 @@ npm run up:local
 
 UI local:
 
-- `http://localhost:5678`
+- `http://127.0.0.1:5678`
+
+La UI queda enlazada solo a loopback en Docker Compose para no exponer `n8n` a la red local. Publicar `n8n` por túnel debe ser una excepción temporal para OAuth o debugging.
 
 Documentación detallada:
 
